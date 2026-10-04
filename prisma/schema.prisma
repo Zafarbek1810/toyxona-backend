@@ -1,0 +1,455 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  customer
+  seller
+  admin
+}
+
+enum SellerStatus {
+  active
+  pending
+  blocked
+  suspended
+}
+
+enum ProductStatus {
+  draft
+  active
+  inactive
+  archived
+}
+
+enum ModerationStatus {
+  pending
+  approved
+  rejected
+}
+
+enum OrderStatus {
+  new
+  confirmed
+  preparing
+  shipping
+  delivered
+  cancelled
+}
+
+enum PaymentMethod {
+  payme
+  click
+  uzum
+  paynet
+  card
+}
+
+enum PaymentStatus {
+  pending
+  confirmed
+  refunded
+  payout
+}
+
+enum PaymentType {
+  sale
+  subscription
+  topup
+  refund
+  payout
+}
+
+enum DeliveryMethod {
+  standard
+  express
+  pickup
+}
+
+enum SubscriptionPlanId {
+  start
+  business
+  pro
+}
+
+enum BillingCycle {
+  monthly
+  yearly
+}
+
+enum PromotionType {
+  banner
+  popup
+  email
+  flash
+}
+
+enum PromotionStatus {
+  active
+  scheduled
+  ended
+}
+
+enum NotificationType {
+  order
+  promo
+  system
+}
+
+enum BusinessType {
+  individual
+  yatt
+  mchj
+  aj
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  phone        String    @unique
+  email        String?   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         Role      @default(customer)
+  birthDate    String?
+  city         String?
+  active       Boolean   @default(true)
+  language     String    @default("uz")
+  currency     String    @default("uzs")
+  orderUpdates Boolean   @default(true)
+  promoEmails  Boolean   @default(true)
+  smsAlerts    Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  seller         Seller?
+  addresses      Address[]
+  cartItems      CartItem[]
+  favorites      Favorite[]
+  orders         Order[]         @relation("CustomerOrders")
+  reviews        Review[]
+  notifications  Notification[]
+  passwordResets PasswordReset[]
+}
+
+model Seller {
+  id             Int          @id @default(autoincrement())
+  userId         Int          @unique
+  name           String
+  slug           String       @unique
+  logo           String?
+  description    String?
+  verified       Boolean      @default(false)
+  location       String?
+  phone          String?
+  email          String?
+  businessType   BusinessType @default(individual)
+  workingHours   String       @default("09:00 - 18:00")
+  status         SellerStatus @default(pending)
+  planId         SubscriptionPlanId @default(start)
+  billingCycle   BillingCycle @default(monthly)
+  planExpiresAt  DateTime?
+  salesTotal     Int          @default(0)
+  followersCount Int          @default(0)
+  minOrderAmount Int          @default(0)
+  deliveryTimeframe String    @default("1-3 kun")
+  freeDeliveryThreshold Int   @default(500000)
+  notifyNewOrder Boolean      @default(true)
+  notifyNewReview Boolean     @default(true)
+  notifyLowStock Boolean      @default(true)
+  notifyPayment  Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products     Product[]
+  orders       Order[]
+  reviews      Review[]
+  payments     Payment[]
+  subscriptions SellerSubscription[]
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  icon      String?
+  color     String   @default("#1A3A6E")
+  bg        String   @default("#EEF3FB")
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subcategories SubCategory[]
+  products      Product[]
+}
+
+model SubCategory {
+  id         Int      @id @default(autoincrement())
+  categoryId Int
+  name       String
+  icon       String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([categoryId, name])
+}
+
+model Product {
+  id               Int              @id @default(autoincrement())
+  sellerId         Int
+  categoryId       Int
+  subCategoryId    Int?
+  name             String
+  brand            String?
+  description      String
+  price            Int
+  oldPrice         Int?
+  discount         Int              @default(0)
+  stock            Int              @default(0)
+  sku              String?
+  image            String?
+  images           String           @default("[]")
+  specs            String           @default("{}")
+  status           ProductStatus    @default(draft)
+  moderationStatus ModerationStatus @default(pending)
+  location         String?
+  rating           Float            @default(0)
+  reviewCount      Int              @default(0)
+  views            Int              @default(0)
+  ordersCount      Int              @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  seller      Seller       @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  category    Category     @relation(fields: [categoryId], references: [id])
+  subCategory SubCategory? @relation(fields: [subCategoryId], references: [id])
+  orderItems  OrderItem[]
+  cartItems   CartItem[]
+  favorites   Favorite[]
+  reviews     Review[]
+}
+
+model Address {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String
+  fullName  String
+  phone     String
+  region    String
+  address   String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CartItem {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  productId Int
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+}
+
+model Favorite {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  productId Int
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+}
+
+model Order {
+  id             Int            @id @default(autoincrement())
+  orderNumber    String         @unique
+  customerId     Int
+  sellerId       Int
+  status         OrderStatus    @default(new)
+  subtotal       Int
+  deliveryFee    Int            @default(0)
+  discountAmount Int            @default(0)
+  total          Int
+  paymentMethod  PaymentMethod
+  paymentStatus  PaymentStatus  @default(pending)
+  deliveryMethod DeliveryMethod @default(standard)
+  promoCode      String?
+  recipientName  String
+  recipientPhone String
+  region         String
+  address        String
+  note           String?
+  reviewed       Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  customer User   @relation("CustomerOrders", fields: [customerId], references: [id])
+  seller   Seller @relation(fields: [sellerId], references: [id])
+  items    OrderItem[]
+  payments Payment[]
+  review   Review?
+}
+
+// Alias relation name helper — Prisma needs User type
+model OrderItem {
+  id        Int    @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  name      String
+  image     String?
+  unitPrice Int
+  quantity  Int
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Review {
+  id               Int      @id @default(autoincrement())
+  productId        Int
+  sellerId         Int
+  userId           Int
+  orderId          Int?     @unique
+  rating           Int
+  comment          String
+  verifiedPurchase Boolean  @default(false)
+  sellerReply      String?
+  repliedAt        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  seller  Seller  @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order   Order?  @relation(fields: [orderId], references: [id])
+}
+
+model Payment {
+  id            Int           @id @default(autoincrement())
+  transactionId String        @unique
+  sellerId      Int?
+  orderId       Int?
+  userId        Int?
+  type          PaymentType
+  amount        Int
+  method        PaymentMethod
+  status        PaymentStatus @default(pending)
+  description   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  seller Seller? @relation(fields: [sellerId], references: [id])
+  order  Order?  @relation(fields: [orderId], references: [id])
+}
+
+model SubscriptionPlan {
+  id           SubscriptionPlanId @id
+  name         String
+  monthlyPrice Int
+  yearlyPrice  Int
+  color        String
+  popular      Boolean            @default(false)
+  features     String             @default("[]")
+  limits       String
+  productLimit Int
+  active       Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  subscriptions SellerSubscription[]
+}
+
+model SellerSubscription {
+  id           Int                @id @default(autoincrement())
+  sellerId     Int
+  planId       SubscriptionPlanId
+  billingCycle BillingCycle       @default(monthly)
+  status       String             @default("active")
+  startsAt     DateTime           @default(now())
+  expiresAt    DateTime
+  paymentId    Int?
+  createdAt    DateTime           @default(now())
+
+  seller Seller           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id])
+}
+
+model Promotion {
+  id          Int             @id @default(autoincrement())
+  title       String
+  type        PromotionType   @default(banner)
+  status      PromotionStatus @default(scheduled)
+  description String?
+  link        String?
+  image       String?
+  promoCode   String?         @unique
+  discountPct Int?
+  startDate   DateTime
+  endDate     DateTime
+  clicks      Int             @default(0)
+  conversions Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  title     String
+  message   String
+  type      NotificationType @default(system)
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PlatformSettings {
+  id                 Int      @id @default(1)
+  name               String   @default("To'yxona")
+  supportEmail       String   @default("support@toyxona.uz")
+  phone              String   @default("+998 71 200 00 00")
+  address            String   @default("Toshkent shahri")
+  commissionPct      Float    @default(5)
+  minPayout          Int      @default(100000)
+  payoutDelayDays    Int      @default(3)
+  mandatory2FA       Boolean  @default(false)
+  autoApproveSellers Boolean  @default(false)
+  fraudMonitoring    Boolean  @default(true)
+  maintenanceMode    Boolean  @default(false)
+  notifyNewSeller    Boolean  @default(true)
+  notifyNewOrder     Boolean  @default(true)
+  notifyRefund       Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
+}
